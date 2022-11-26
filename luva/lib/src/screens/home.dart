@@ -34,7 +34,6 @@ class _HomeState extends State<Home>
   @override
   void dispose()
   {
-    //SensorDataNotifier.of(context).disconnectBluetooth();
     super.dispose();
   }
 
@@ -240,7 +239,7 @@ class _HomeState extends State<Home>
         ],
       ),
       body: AbsorbPointer(
-        absorbing: false, //!_enableScreen,
+        absorbing: !_enableScreen,
         child: Container(
           color: (_enableScreen)? null : Colors.black12,
           child: DefaultTabController(

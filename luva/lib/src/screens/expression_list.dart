@@ -83,91 +83,99 @@ class _ExpressionListState extends State<ExpressionList>
 
   Future<Map<String, double>> trainModel() async
   {
-    final stopwatch = Stopwatch()..start();
-
-    final List<Expression> expressions = await Expression.getAllByLanguage(SensorDataNotifier.of(context).currentLanguage!);
-    final List<List<Object?>> trainingDataList = [];
-    
-    for(var exp in expressions)
+    try
     {
-      final list = await TrainingData.getAllByExpression(exp);
+      final stopwatch = Stopwatch()..start();
+
+      final List<Expression> expressions = await Expression.getAllByLanguage(SensorDataNotifier.of(context).currentLanguage!);
+      final List<List<Object?>> trainingDataList = [];
       
-      trainingDataList.addAll(
-        list.map(
-          (data)
-          {
-            return [
-              data.flex1,
-              data.flex2,
-              data.flex3,
-              data.flex4,
-              data.flex5,
-              data.mpuAccX,
-              data.mpuAccY,
-              data.mpuAccZ,
-              data.expressionId
-            ];
-          }
-        )
+      for(var exp in expressions)
+      {
+        final list = await TrainingData.getAllByExpression(exp);
+        
+        trainingDataList.addAll(
+          list.map(
+            (data)
+            {
+              return [
+                data.flex1,
+                data.flex2,
+                data.flex3,
+                data.flex4,
+                data.flex5,
+                data.mpuAccX,
+                data.mpuAccY,
+                data.mpuAccZ,
+                data.expressionId
+              ];
+            }
+          )
+        );
+      }
+
+      final List<List> data = [];
+      data.add(["flex1", "flex2", "flex3", "flex4", "flex5", "accX", "accY", "accZ", "expression"]);
+
+      data.addAll(trainingDataList);
+
+      final dataFrame = DataFrame(
+        data,
+      ).shuffle();
+
+      final splits = splitData(dataFrame, [0.8]);
+
+      final tree = DecisionTreeClassifier(
+        splits[0],
+        "expression",
+        maxDepth: expressions.length,
+        minError: 0.1
       );
-    }
 
-    final List<List> data = [];
-    data.add(["flex1", "flex2", "flex3", "flex4", "flex5", "accX", "accY", "accZ", "expression"]);
+      
+      if(!mounted)
+      {
+        stopwatch.stop();
+        return Future.error(Exception());
+      }
 
-    data.addAll(trainingDataList);
+      final machineLearningModel = jsonEncode(tree.toJson());
+      final precision = tree.assess(splits[1], MetricType.precision);
+      final accuracy = tree.assess(splits[1], MetricType.accuracy);
 
-    final dataFrame = DataFrame(
-      data,
-    ).shuffle();
+      flutter_console.log("Model Trained: ");
+      flutter_console.log("Precision: $precision");
+      flutter_console.log("Accuracy: $accuracy");
+      flutter_console.log("Model: $machineLearningModel");
+      flutter_console.log("Elapsed Milliseconds: ${stopwatch.elapsedMilliseconds}");
 
-    final splits = splitData(dataFrame, [0.8]);
+      Language languageToUpdate = Language(
+        id: SensorDataNotifier.of(context).currentLanguage!.id,
+        name: SensorDataNotifier.of(context).currentLanguage!.name,
+        deviceId: SensorDataNotifier.of(context).currentLanguage!.deviceId,
+        machineLearningModel: machineLearningModel
+      );
 
-    final tree = DecisionTreeClassifier(
-      splits[0],
-      "expression",
-      maxDepth: expressions.length,
-      minError: 0.1
-    );
+      await Language.update(languageToUpdate);
+      final updatedLanguage = await Language.get(languageToUpdate.id!);
 
-    
-    if(!mounted)
-    {
       stopwatch.stop();
+
+      if(!mounted) return Future.error(Exception());
+
+      SensorDataNotifier.of(context).currentLanguage = updatedLanguage;
+
+      return {
+        "precision": precision,
+        "accuracy": accuracy,
+        "elapsed": (stopwatch.elapsedMilliseconds / 60000).toDouble()
+      };
+    }
+    catch(err)
+    {
+      flutter_console.logError("Error on training model => $err");
       return Future.error(Exception());
     }
-
-    final machineLearningModel = jsonEncode(tree.toJson());
-    final precision = tree.assess(splits[1], MetricType.precision);
-    final accuracy = tree.assess(splits[1], MetricType.accuracy);
-
-    flutter_console.log("Model Trained: ");
-    flutter_console.log("Precision: $precision");
-    flutter_console.log("Accuracy: $accuracy");
-    flutter_console.log("Model: $machineLearningModel");
-    flutter_console.log("Elapsed Milliseconds: ${stopwatch.elapsedMilliseconds}");
-
-    Language languageToUpdate = Language(
-      id: SensorDataNotifier.of(context).currentLanguage!.id,
-      name: SensorDataNotifier.of(context).currentLanguage!.name,
-      deviceId: SensorDataNotifier.of(context).currentLanguage!.deviceId,
-      machineLearningModel: machineLearningModel
-    );
-
-    await Language.update(languageToUpdate);
-    final updatedLanguage = await Language.get(languageToUpdate.id!);
-
-    stopwatch.stop();
-
-    if(!mounted) return Future.error(Exception());
-
-    SensorDataNotifier.of(context).currentLanguage = updatedLanguage;
-
-    return {
-      "precision": precision,
-      "accuracy": accuracy,
-      "elapsed": (stopwatch.elapsedMilliseconds / 60000).toDouble()
-    };
   }
 
   @override
@@ -259,8 +267,7 @@ class _ExpressionListState extends State<ExpressionList>
                     child: const Icon(Icons.add),
                   ),
                   ElevatedButton(
-                    child: const Text("Treinar Modelo"),
-                    onPressed: () 
+                    onPressed: (snapshot.data!.isNotEmpty)? () 
                     {
                       showAddNoneExpressionDialog(
                         context: context,
@@ -276,8 +283,8 @@ class _ExpressionListState extends State<ExpressionList>
                           futureMapPerformance: trainModel(),
                         );
                       }); 
-
-                    }
+                    } : null,
+                    child: const Text("Treinar Modelo"),
                   )
                 ]
               ),
