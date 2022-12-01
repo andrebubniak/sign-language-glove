@@ -29,30 +29,18 @@ class DB
     final completePath = "$dbPath/$dbName";
     return await openDatabase(
       completePath,
-      version: 3,
+      version: 1,
       onCreate: _onCreate,
       onConfigure: _onConfigure,
-      onUpgrade: _onUpgrade
     );
-  }
-
-
-  Future _onUpgrade(Database db, int oldVersion, int newVersion) async
-  {
-    await db.execute("DROP TABLE device");
-    await db.execute("DROP TABLE language");
-    await db.execute("DROP TABLE expression");
-
-    await db.execute(_createDeviceTable);
-    await db.execute(_createLanguageTable);
-    await db.execute(_createExpressionTable);
-    await db.execute(_createTrainingDataTable);
   }
 
   Future _onCreate(db, version) async
   {
     await db.execute(_createDeviceTable);
     await db.execute(_createLanguageTable);
+    await db.execute(_createExpressionTable);
+    await db.execute(_createTrainingDataTable);
   }
 
   Future _onConfigure(Database db) async 
@@ -67,7 +55,6 @@ class DB
   }
 
 }
-
 
 
 const String _createDeviceTable = 
